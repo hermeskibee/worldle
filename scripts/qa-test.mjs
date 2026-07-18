@@ -75,8 +75,8 @@ async function waitForGameReady(page, context, timeoutMs = 10000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const target = await decodeTarget(context);
-    const attemptCount = await page.textContent("#attemptCount").catch(() => null);
-    if (target && attemptCount != null && attemptCount.trim() === "0") return;
+    const attemptCount = await page.textContent("#attemptInfo").catch(() => null);
+    if (target && attemptCount != null && attemptCount.trim() === "0/6") return;
     await page.waitForTimeout(100);
   }
   fail("timed out waiting for /api/new to set the game cookie and reset the board");
@@ -260,7 +260,7 @@ test("L3: new game after a win resets state and can be won again", async (page, 
 
   await page.click("#newgame");
   await waitForGameReady(page, context);
-  assert((await page.textContent("#attemptCount")).trim() === "0", "attempt count did not reset");
+  assert((await page.textContent("#attemptInfo")).trim() === "0/6", "attempt count did not reset");
   const freshClasses = await tileClasses(page, 0);
   freshClasses.forEach((cls, i) => assert(cls.trim() === "tile", `tile-0-${i} not reset, got "${cls}"`));
 
@@ -312,7 +312,7 @@ test("L3: new game after win doesn't double-submit via focus-stolen Enter", asyn
   await typeWord(page, target2);
   await page.waitForTimeout(FLIP_SETTLE_MS);
   // Critical: ensure only 1 attempt was recorded
-  const attemptCount = (await page.textContent("#attemptCount")).trim();
+  const attemptCount = (await page.textContent("#attemptInfo")).trim();
   assert(attemptCount === "1" || attemptCount === "1/6", `expected 1 attempt, got "${attemptCount}"`);
   assert(/Solved in 1\/6/.test(await page.textContent("#message")), "win message missing/wrong after new-game + win");
 });
@@ -426,7 +426,7 @@ test("L4: hint word chips are clickable and submit the word", async (page, conte
     await chips[0].click();
     await page.waitForTimeout(FLIP_SETTLE_MS + 500);
     // Check that a guess was made (attempt count increased or win triggered)
-    const attemptCount = (await page.textContent("#attemptCount")).trim();
+    const attemptCount = (await page.textContent("#attemptInfo")).trim();
     const attemptNum = parseInt(attemptCount);
     assert(attemptNum >= 3, `expected attempt >= 3 after clicking word chip, got ${attemptNum}`);
   }
@@ -479,7 +479,7 @@ test("L5: rapid keyboard input doesn't break state", async (page, context) => {
   const filler = FILLER_WORDS.find((w) => w !== target);
   await typeWord(page, filler);
   await page.waitForTimeout(FLIP_SETTLE_MS);
-  const attemptCount = (await page.textContent("#attemptCount")).trim();
+  const attemptCount = (await page.textContent("#attemptInfo")).trim();
   assert(attemptCount === "1" || attemptCount === "1/6", `expected 1 attempt after a real guess, got "${attemptCount}"`);
 });
 
@@ -488,7 +488,7 @@ test("L5: incorrect word shows 'not in word list' without consuming attempt", as
   await page.waitForTimeout(400);
   const msg = await page.textContent("#message");
   assert(/isn't in the word list/.test(msg), `expected word-list rejection, got "${msg}"`);
-  assert((await page.textContent("#attemptCount")).trim() === "0", "attempt count changed on invalid word");
+  assert((await page.textContent("#attemptInfo")).trim() === "0/6", "attempt count changed on invalid word");
 });
 
 test("L5: short word shows 'not enough letters' without consuming attempt", async (page) => {
@@ -498,7 +498,7 @@ test("L5: short word shows 'not enough letters' without consuming attempt", asyn
   await page.keyboard.press("Enter");
   await page.waitForTimeout(200);
   assert((await page.textContent("#message")).includes("Not enough letters"), "short guess not rejected");
-  assert((await page.textContent("#attemptCount")).trim() === "0", "attempt count changed on rejected short guess");
+  assert((await page.textContent("#attemptInfo")).trim() === "0/6", "attempt count changed on rejected short guess");
 });
 
 // ────────────── L6: Mobile & Layout ──────────────

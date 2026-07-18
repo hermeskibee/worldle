@@ -331,14 +331,6 @@ HTML_PAGE = r"""
     font-size: 1rem;
     text-shadow: 0 0 10px rgba(45, 217, 255, 0.5);
   }
-  .subtitle {
-    color: var(--dim);
-    margin-bottom: 18px;
-    font-size: 0.82rem;
-    max-width: 420px;
-    width: 100%;
-    flex-shrink: 0;
-  }
   .terminal {
     width: 100%;
     max-width: 420px;
@@ -366,12 +358,17 @@ HTML_PAGE = r"""
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
+    min-width: 0;
+    min-height: 0;
   }
   .tile {
     aspect-ratio: 1;
+    min-width: 0;
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
     border: 1px solid var(--panel-border);
     border-radius: 8px;
     font-size: clamp(1.1rem, 5vw, 1.5rem);
@@ -396,14 +393,37 @@ HTML_PAGE = r"""
   .tile.correct { background: var(--correct); border-color: var(--correct); color: #052e22; box-shadow: 0 0 16px rgba(23, 224, 161, 0.55); }
   .tile.present { background: var(--present); border-color: var(--present); color: #3a2900; box-shadow: 0 0 16px rgba(255, 209, 102, 0.5); }
   .tile.absent  { background: var(--absent); border-color: var(--absent); color: #9a94c0; }
+  .top-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  #attemptInfo {
+    color: var(--dim);
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .status-dot {
+    color: var(--dim);
+    opacity: 0.6;
+  }
   #message {
     min-height: 1.4em;
     text-align: center;
     color: var(--magenta);
-    margin-bottom: 14px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     flex-shrink: 0;
+    width: 100%;
+    max-width: 420px;
+  }
+  #message.top-msg {
+    margin-bottom: 4px;
+  }
+  #message.inline-msg {
+    margin: 0;
+    min-height: 0;
   }
   #keyboard {
     display: flex;
@@ -562,12 +582,11 @@ HTML_PAGE = r"""
 
   @media (max-height: 700px) {
     body { padding: clamp(8px, 2vw, 16px); }
-    .subtitle { margin-bottom: 8px; }
     .terminal { padding: 12px; }
     #board { gap: 4px; margin-bottom: 10px; }
     .row { gap: 4px; }
     .tile { font-size: clamp(1rem, 4.5vw, 1.4rem); }
-    #message { margin-bottom: 8px; }
+    #message.top-msg { margin-bottom: 4px; }
     #keyboard { gap: 4px; }
     .kb-row { gap: 4px; }
     .key { padding: clamp(6px, 2.4vw, 12px) 4px; font-size: 0.75rem; }
@@ -582,12 +601,15 @@ HTML_PAGE = r"""
       <h1>WORDLE</h1>
       <button id="hintBtn" title="Hints">?</button>
     </div>
-    <div id="timer">00:00</div>
+    <div class="top-info">
+      <span id="attemptInfo">0/6</span>
+      <span class="status-dot">&middot;</span>
+      <span id="timer">00:00</span>
+    </div>
   </div>
-  <div class="subtitle">attempt <span id="attemptCount">0</span>/6</div>
+  <div id="message" class="top-msg">&nbsp;</div>
   <div class="terminal">
     <div id="board"></div>
-    <div id="message">&nbsp;</div>
     <div id="keyboard"></div>
   </div>
   <button id="newgame">New Game</button>
@@ -615,7 +637,7 @@ let timerHandle = null;
 const boardEl = document.getElementById("board");
 const messageEl = document.getElementById("message");
 const keyboardEl = document.getElementById("keyboard");
-const attemptCountEl = document.getElementById("attemptCount");
+const attemptInfoEl = document.getElementById("attemptInfo");
 const timerEl = document.getElementById("timer");
 const hintOverlay = document.getElementById("hintOverlay");
 const hintModal = document.getElementById("hintModal");
@@ -684,7 +706,7 @@ function renderBoard() {
       }
     }
   }
-  attemptCountEl.textContent = attempts.length;
+  attemptInfoEl.textContent = attempts.length + "/6";
 }
 
 function animateLastRow() {
