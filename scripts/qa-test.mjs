@@ -370,6 +370,22 @@ test("no white gap below game content (html background matches page theme)", asy
   assert(htmlBg !== "rgba(0, 0, 0, 0)" && htmlBg !== "rgb(255, 255, 255)", `html background looks unset/white: "${htmlBg}"`);
 });
 
+test("page fits within the viewport on small phones (iPhone SE, no overflow scroll)", async (page) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(150); // let the resize-driven reflow settle
+  const metrics = await page.evaluate(() => ({
+    scrollHeight: document.documentElement.scrollHeight,
+    clientHeight: document.documentElement.clientHeight,
+  }));
+  assert(
+    metrics.scrollHeight <= metrics.clientHeight + 1,
+    `page overflows the viewport on a 375x667 screen: scrollHeight ${metrics.scrollHeight} > clientHeight ${metrics.clientHeight}`
+  );
+  for (const sel of ["#board", "#keyboard", "#newgame", ".site-footer"]) {
+    assert(await page.isVisible(sel), `${sel} not visible on a 375x667 screen`);
+  }
+});
+
 test("ruled-out (absent) keyboard letters become disabled and unclickable", async (page, context) => {
   const target = await decodeTarget(context);
   const guess = FILLER_WORDS.find((w) => w !== target);

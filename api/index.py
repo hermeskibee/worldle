@@ -266,16 +266,17 @@ HTML_PAGE = r"""
   * { box-sizing: border-box; }
   html, body {
     height: 100%;
+    height: 100dvh;
     margin: 0;
     background: var(--bg-bottom);
     overscroll-behavior: none;
+    overflow: hidden;
   }
   html {
     touch-action: manipulation;
     -webkit-text-size-adjust: 100%;
   }
   body {
-    min-height: 100%;
     background: radial-gradient(circle at 50% -10%, #2a1250 0%, var(--bg-top) 45%, var(--bg-bottom) 100%);
     color: var(--fg);
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -339,6 +340,9 @@ HTML_PAGE = r"""
   .terminal {
     width: 100%;
     max-width: 420px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     background: var(--panel);
     backdrop-filter: blur(6px);
     border: 1px solid var(--panel-border);
@@ -544,6 +548,18 @@ HTML_PAGE = r"""
 
   @media (max-width: 380px) {
     h1 { letter-spacing: 0.22em; }
+  }
+
+  @media (max-height: 700px) {
+    body { padding: clamp(8px, 2vw, 16px); }
+    .terminal { padding: 12px; }
+    #board { gap: 4px; margin-bottom: 10px; }
+    .row { gap: 4px; }
+    #message { margin-bottom: 8px; }
+    #keyboard { gap: 4px; }
+    .kb-row { gap: 4px; }
+    #newgame { margin: 10px auto 0; }
+    .site-footer { margin-top: 10px; }
   }
 </style>
 </head>

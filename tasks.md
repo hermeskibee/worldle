@@ -9,14 +9,14 @@
 ## 🔴 P1 — Bugs (krytyczne)
 
 - [x] **Double-tap zoom** — szybkie 2x kliknięcie na klawiaturę przybliża stronę. Fix: `touch-action: manipulation` na body + meta viewport (`maximum-scale=1, user-scalable=no`).
-- [x] **Biała pusta sekcja na dole** — layout ma pustą białą przestrzeń pod grą. Fix: `html` background dopasowany do gradientu + `overscroll-behavior: none`.
+- [x] **Biała pusta sekcja na dole** — layout ma pustą białą przestrzeń pod grą. Pierwszy fix (background/overscroll) był tylko kosmetyczny; prawdziwy root cause: na małych telefonach (iPhone SE 375x667) suma wysokości terminala+klawiatury+paddingów przekraczała 100dvh o ~120px, więc strona faktycznie scrollowała i odsłaniała puste tło pod spodem. Strukturalny fix: `html, body { height: 100dvh; overflow: hidden; }`, `.terminal { flex: 1; min-height: 0; overflow-y: auto; }` (wewnętrzny scroll tylko w panelu gry, nigdy na całej stronie), plus zmniejszone paddingi/gapy/marginesy w `@media (max-height: 700px)`. Zweryfikowane: `scrollHeight === clientHeight` na 375x667, nowy test regresyjny w qa-test.mjs.
 - [x] **Winning bug** — root cause: przycisk "New Game" (i klawisze) zatrzymywały fokus po kliknięciu, więc kolejny fizyczny Enter wywoływał natywny click na starym przycisku równolegle z submitGuess(), co psuło stan gry. Fix: `mousedown` → `preventDefault()` na wszystkich przyciskach klawiatury i #newgame.
 - [x] **Nieaktywne literki** — literki oznaczone jako "absent" dostają teraz `disabled = true` na przycisku (nieklikalne). Shake/komunikat nie zaimplementowany — nie było w bieżącym zakresie zgłoszenia.
 
 ## 🟡 P2 — Features (ważne)
 
-- [ ] **Lepszy system hintów** — hint words klikalne (auto-wypełnienie i submit), checkbox "pin hints" (małe ikonki sticky na stałe).
-- [ ] **Footer** — "Created by Mindster – Moca Mind" na dole strony.
+- [ ] **Lepszy system hintów** — hint words klikalne → kliknięcie wypełnia aktywny wiersz i submittuje (jak Enter). Toggle "quick hints" — małe, persistent hints wyświetlane pod boardem (bez otwierania modala). Włącz/wyłącz toggle buttonem.
+- [x] **Footer** — "Created by Mindster – Moca Mind" na dole strony. (już jest)
 - [ ] **QA loop** — po każdej zmianie odpalić Playwright QA suite. Jeśli testy padną — loop fix → test → fix → test aż wszystko przejdzie.
 
 ## 🟢 P3 — Ulepszenia
