@@ -1,0 +1,23 @@
+{
+  "name": "worldle",
+  "version": "1.0.0",
+  "description": "A terminal WORDLE clone in a single dependency-free Python file, plus a web version that serves the same game logic through a FastAPI app on Vercel.",
+  "main": "index.js",
+  "scripts": {
+    "test:qa": "node scripts/qa-test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hermeskibee/worldle.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hermeskibee/worldle/issues"
+  },
+  "homepage": "https://github.com/hermeskibee/worldle#readme",
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

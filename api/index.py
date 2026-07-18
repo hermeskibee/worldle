@@ -76,7 +76,7 @@ def _decode_state(cookie_value: Optional[str]) -> Optional[dict]:
 
 def _new_state() -> dict:
     return {
-        "target": random_word(),
+        "target": random_word().upper(),
         "attempts": [],
         "game_over": False,
         "won": False,
@@ -246,7 +246,7 @@ HTML_PAGE = r"""
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>WORDLE</title>
 <style>
   :root {
@@ -267,6 +267,12 @@ HTML_PAGE = r"""
   html, body {
     height: 100%;
     margin: 0;
+    background: var(--bg-bottom);
+    overscroll-behavior: none;
+  }
+  html {
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
   }
   body {
     min-height: 100%;
@@ -278,6 +284,7 @@ HTML_PAGE = r"""
     align-items: center;
     padding: clamp(14px, 4vw, 32px) 12px 40px;
     overflow-x: hidden;
+    touch-action: manipulation;
   }
   .topbar {
     width: 100%;
@@ -326,7 +333,6 @@ HTML_PAGE = r"""
     color: var(--dim);
     margin-bottom: 18px;
     font-size: 0.82rem;
-    align-self: flex-start;
     max-width: 420px;
     width: 100%;
   }
@@ -411,10 +417,14 @@ HTML_PAGE = r"""
     border-radius: 6px;
     cursor: pointer;
     text-transform: uppercase;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
   }
   .key.correct { background: var(--correct); border-color: var(--correct); color: #052e22; }
   .key.present { background: var(--present); border-color: var(--present); color: #3a2900; }
   .key.absent  { background: var(--absent); border-color: var(--absent); color: #6a648f; }
+  .key:disabled { cursor: not-allowed; }
   .key.wide { flex: 1.6; max-width: 64px; font-size: 0.68rem; }
   #newgame {
     display: block;
@@ -429,6 +439,19 @@ HTML_PAGE = r"""
     cursor: pointer;
   }
   #newgame:hover { filter: brightness(1.1); box-shadow: 0 0 20px rgba(255, 79, 216, 0.4); }
+
+  .site-footer {
+    margin-top: 22px;
+    font-size: 0.72rem;
+    color: var(--dim);
+    text-align: center;
+    opacity: 0.7;
+  }
+  .site-footer a {
+    color: var(--dim);
+    text-decoration: none;
+  }
+  .site-footer a:hover { color: var(--cyan); }
 
   .overlay {
     position: fixed;
@@ -540,6 +563,7 @@ HTML_PAGE = r"""
   </div>
   <button id="newgame">New Game</button>
   <div id="sparkles"></div>
+  <footer class="site-footer">Created by Mindster &middot; <a href="https://mindster.space" target="_blank" rel="noopener">Moca Mind</a></footer>
 
   <div class="overlay hidden" id="hintOverlay">
     <div class="modal" id="hintModal"></div>
@@ -601,6 +625,7 @@ function makeKey(label, wide) {
   btn.className = "key" + (wide ? " wide" : "");
   btn.textContent = label;
   btn.dataset.key = label;
+  btn.addEventListener("mousedown", (e) => e.preventDefault());
   btn.addEventListener("click", () => handleKey(label));
   return btn;
 }
@@ -653,6 +678,7 @@ function renderKeyboard() {
     const k = btn.dataset.key;
     if (k.length === 1 && keyStatus[k]) {
       btn.className = "key " + keyStatus[k] + (btn.classList.contains("wide") ? " wide" : "");
+      btn.disabled = keyStatus[k] === "absent";
     }
   });
 }
@@ -809,7 +835,9 @@ document.addEventListener("keydown", (e) => {
   else if (/^[A-Z]$/.test(key)) handleKey(key);
 });
 
-document.getElementById("newgame").addEventListener("click", newGame);
+const newGameBtn = document.getElementById("newgame");
+newGameBtn.addEventListener("mousedown", (e) => e.preventDefault());
+newGameBtn.addEventListener("click", newGame);
 
 // --- Hint / cheat modal ---
 
