@@ -182,6 +182,20 @@ test("L1: timer is visible and starts at 00:00", async (page) => {
   assert(timer === "00:00", `expected initial timer 00:00, got "${timer}"`);
 });
 
+test("L1: attempt counter sits next to the timer in the topbar, both actually on-screen", async (page) => {
+  const attemptInfo = (await page.textContent("#attemptInfo")).trim();
+  assert(attemptInfo === "0/6", `expected attempt info 0/6, got "${attemptInfo}"`);
+
+  const viewport = page.viewportSize();
+  const timerBox = await page.$eval("#timer", (el) => el.getBoundingClientRect());
+  const attemptBox = await page.$eval("#attemptInfo", (el) => el.getBoundingClientRect());
+  // Regression: .top-info previously had width:100% inside a flex row, which
+  // pushed #timer past the right edge of the viewport (invisible, but not
+  // caught by overflow-x checks since body clips it with no scrollbar).
+  assert(timerBox.right <= viewport.width + 1, `#timer rendered off-screen: right=${timerBox.right}, viewport width=${viewport.width}`);
+  assert(timerBox.left >= attemptBox.right, "timer should sit to the right of the attempt counter, not overlap it");
+});
+
 test("L1: hint button is visible and clickable", async (page) => {
   assert(await page.isVisible("#hintBtn"), "hint button not visible");
   await page.click("#hintBtn");
