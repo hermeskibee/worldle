@@ -65,11 +65,41 @@ async function decodeTarget(context) {
   return JSON.parse(json).target;
 }
 
+// Vercel cold starts and real network latency can push /api/new well past a
+// fixed short wait, so poll for the session cookie instead of sleeping a
+// hardcoded duration -- this keeps the suite reliable against both a local
+// server and a remote deployment. The cookie can land a tick before the
+// client's own await-fetch chain finishes resetting the DOM, so also wait
+// for the board to actually reflect a fresh game (attemptCount back to 0).
+async function waitForGameReady(page, context, timeoutMs = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const target = await decodeTarget(context);
+    const attemptCount = await page.textContent("#attemptCount").catch(() => null);
+    if (target && attemptCount != null && attemptCount.trim() === "0") return;
+    await page.waitForTimeout(100);
+  }
+  fail("timed out waiting for /api/new to set the game cookie and reset the board");
+}
+
+// Waits for the actual /api/guess round trip to finish before returning, so
+// FLIP_SETTLE_MS below only has to cover the client-side flip animation, not
+// also absorb Vercel's real network/cold-start latency.
 async function typeWord(page, word) {
+  const responded = page.waitForResponse((res) => res.url().includes("/api/guess"), { timeout: 20000 });
   for (const ch of word) {
     await page.keyboard.press(ch.toUpperCase());
   }
   await page.keyboard.press("Enter");
+  await responded;
+}
+
+// Same idea for the hint confirm button -- wait for /api/hint to actually
+// respond instead of assuming a fixed timeout covers the network round trip.
+async function confirmHint(page) {
+  const responded = page.waitForResponse((res) => res.url().includes("/api/hint"), { timeout: 20000 });
+  await page.click(".modal-actions button.confirm");
+  await responded;
 }
 
 async function tileClasses(page, row) {
@@ -104,7 +134,7 @@ async function withPage(browser, fn) {
   try {
     await page.goto(BASE_URL + "/");
     await page.waitForSelector("#board");
-    await page.waitForTimeout(300); // let the initial /api/new fetch settle
+    await waitForGameReady(page, context); // wait for the initial /api/new fetch to settle
     await fn(page, context, errors);
     assert(errors.length === 0, "unexpected JS errors: " + JSON.stringify(errors));
   } finally {
@@ -157,7 +187,7 @@ test("new game after a win resets state and can be won again", async (page, cont
   await page.waitForTimeout(FLIP_SETTLE_MS);
 
   await page.click("#newgame");
-  await page.waitForTimeout(300);
+  await waitForGameReady(page, context);
   assert((await page.textContent("#attemptCount")).trim() === "0", "attempt count did not reset");
   const freshClasses = await tileClasses(page, 0);
   freshClasses.forEach((cls, i) => assert(cls.trim() === "tile", `tile-0-${i} not reset, got "${cls}"`));
@@ -205,7 +235,7 @@ test("new game after a loss resets tiles and scores the next game against the ne
   assert(/Out of guesses/.test(await page.textContent("#message")), "setup: game did not end in a loss");
 
   await page.click("#newgame");
-  await page.waitForTimeout(300);
+  await waitForGameReady(page, context);
   const freshClasses = await tileClasses(page, 0);
   freshClasses.forEach((cls, i) => assert(cls.trim() === "tile", `tile-0-${i} not reset after loss, got "${cls}"`));
   assert((await page.textContent("#message")).includes("Guess the"), "message did not reset after new game");
@@ -229,8 +259,8 @@ test("hint level 1 reveals a correct letter without breaking layout", async (pag
   assert(options.length === 3, `expected 3 hint options, got ${options.length}`);
   await options[0].click();
   await page.waitForTimeout(150);
-  await page.click(".modal-actions button.confirm");
-  await page.waitForTimeout(300);
+  await confirmHint(page);
+  await page.waitForTimeout(150); // let the DOM update after the response
 
   assert(await hasNoHorizontalOverflow(page), "layout overflowed horizontally after hint level 1");
   assert(await page.isVisible("#board"), "board hidden/broken after hint level 1");
@@ -257,8 +287,8 @@ test("hint level 2 shows a handful of candidate words without breaking layout", 
   const options = await page.$$(".modal-option");
   await options[1].click();
   await page.waitForTimeout(150);
-  await page.click(".modal-actions button.confirm");
-  await page.waitForTimeout(300);
+  await confirmHint(page);
+  await page.waitForTimeout(150); // let the DOM update after the response
 
   assert(await hasNoHorizontalOverflow(page), "layout overflowed horizontally after hint level 2");
   const chips = await page.$$(".word-chip");
@@ -281,8 +311,8 @@ test("hint level 3 lists all remaining candidates without breaking layout", asyn
   const options = await page.$$(".modal-option");
   await options[2].click();
   await page.waitForTimeout(150);
-  await page.click(".modal-actions button.confirm");
-  await page.waitForTimeout(500);
+  await confirmHint(page);
+  await page.waitForTimeout(150); // let the DOM update after the response
 
   assert(await hasNoHorizontalOverflow(page), "layout overflowed horizontally after hint level 3 (2489 words)");
   const heading = (await page.textContent("#hintModal h2")).trim();
@@ -360,7 +390,7 @@ test("new game after a win doesn't double-submit via a focus-stolen Enter keypre
   await page.waitForTimeout(FLIP_SETTLE_MS);
 
   await page.click("#newgame");
-  await page.waitForTimeout(300);
+  await waitForGameReady(page, context);
 
   const target2 = await decodeTarget(context);
   assert(target2, "no target after new game");
