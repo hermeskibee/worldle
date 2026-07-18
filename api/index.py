@@ -290,6 +290,7 @@ HTML_PAGE = r"""
   .topbar {
     width: 100%;
     max-width: 420px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -336,13 +337,15 @@ HTML_PAGE = r"""
     font-size: 0.82rem;
     max-width: 420px;
     width: 100%;
+    flex-shrink: 0;
   }
   .terminal {
     width: 100%;
     max-width: 420px;
-    flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     background: var(--panel);
     backdrop-filter: blur(6px);
     border: 1px solid var(--panel-border);
@@ -353,14 +356,15 @@ HTML_PAGE = r"""
   }
   #board {
     display: grid;
-    grid-template-rows: repeat(6, 1fr);
+    grid-template-rows: repeat(6, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 18px;
+    min-height: 0;
     perspective: 500px;
   }
   .row {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
   }
   .tile {
@@ -399,12 +403,14 @@ HTML_PAGE = r"""
     margin-bottom: 14px;
     font-size: 0.9rem;
     font-weight: 600;
+    flex-shrink: 0;
   }
   #keyboard {
     display: flex;
     flex-direction: column;
     gap: 6px;
     align-items: center;
+    flex-shrink: 0;
   }
   .kb-row { display: flex; gap: 5px; width: 100%; justify-content: center; }
   .key {
@@ -432,6 +438,7 @@ HTML_PAGE = r"""
   .key.wide { flex: 1.6; max-width: 64px; font-size: 0.68rem; }
   #newgame {
     display: block;
+    flex-shrink: 0;
     margin: 18px auto 0;
     background: linear-gradient(90deg, var(--cyan), var(--magenta));
     border: none;
@@ -445,6 +452,7 @@ HTML_PAGE = r"""
   #newgame:hover { filter: brightness(1.1); box-shadow: 0 0 20px rgba(255, 79, 216, 0.4); }
 
   .site-footer {
+    flex-shrink: 0;
     margin-top: 22px;
     font-size: 0.72rem;
     color: var(--dim);
@@ -517,7 +525,9 @@ HTML_PAGE = r"""
     border-radius: 6px;
     font-size: 0.85rem;
     letter-spacing: 0.05em;
+    cursor: pointer;
   }
+  .word-chip:hover { border-color: var(--cyan); color: var(--cyan); }
   .modal-close {
     display: block;
     margin: 10px 0 0 auto;
@@ -552,14 +562,17 @@ HTML_PAGE = r"""
 
   @media (max-height: 700px) {
     body { padding: clamp(8px, 2vw, 16px); }
+    .subtitle { margin-bottom: 8px; }
     .terminal { padding: 12px; }
     #board { gap: 4px; margin-bottom: 10px; }
     .row { gap: 4px; }
+    .tile { font-size: clamp(1rem, 4.5vw, 1.4rem); }
     #message { margin-bottom: 8px; }
     #keyboard { gap: 4px; }
     .kb-row { gap: 4px; }
-    #newgame { margin: 10px auto 0; }
-    .site-footer { margin-top: 10px; }
+    .key { padding: clamp(6px, 2.4vw, 12px) 4px; font-size: 0.75rem; }
+    #newgame { margin: 8px auto 0; padding: 8px 18px; }
+    .site-footer { display: none; }
   }
 </style>
 </head>
@@ -940,6 +953,14 @@ async function useHint(level) {
       const chip = document.createElement("span");
       chip.className = "word-chip";
       chip.textContent = w;
+      chip.addEventListener("mousedown", (e) => e.preventDefault());
+      chip.addEventListener("click", () => {
+        if (gameOver) return;
+        currentGuess = w;
+        renderBoard();
+        hintOverlay.classList.add("hidden");
+        submitGuess();
+      });
       list.appendChild(chip);
     });
   }
