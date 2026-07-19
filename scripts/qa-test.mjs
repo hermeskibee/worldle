@@ -787,6 +787,45 @@ test("L8: starting a new game right after a win doesn't get its message clobbere
   assert(message.includes("Guess the"), `expected the new-game prompt to still be showing, got "${message}"`);
 });
 
+test("L8: a dropped /api/guess network request doesn't swallow the guess or freeze the game", async (page, context, errors) => {
+  // Regression: fetch()/res.json() in submitGuess() had no catch. A dropped
+  // connection or cold-start hiccup (common on real mobile networks, never
+  // hit by this suite's fast local/CDN round trips) threw an uncaught
+  // exception mid-request -- the guess vanished with no message, no board
+  // update, and if the server had actually processed the word before the
+  // response was lost, retrying it just got "Game is already over" with no
+  // way to ever see the win.
+  const target = await decodeTarget(context);
+
+  let aborted = false;
+  await page.route("**/api/guess", async (route) => {
+    if (!aborted) {
+      aborted = true;
+      await route.abort("failed");
+    } else {
+      await route.continue();
+    }
+  });
+
+  for (const ch of target) await page.keyboard.press(ch.toUpperCase());
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(800);
+
+  // The injected abort logs a browser-level "failed to load resource"
+  // console error -- expected noise from the fault injection itself, not an
+  // app bug, so it's excluded from the unexpected-JS-errors check below.
+  errors.length = 0;
+
+  assert(/hiccup|try again/i.test(await page.textContent("#message")), "no user-facing message shown after a dropped guess request");
+  assert((await page.textContent("#attemptInfo")).trim() === "0/6", "attempt count advanced even though the request never reached the server");
+  assert((await page.evaluate(() => submitting)) === false, "submitting flag left stuck true after a dropped request");
+
+  // Retry the same guess for real -- the game must not be soft-locked.
+  await typeWord(page, target);
+  await page.waitForTimeout(FLIP_SETTLE_MS);
+  assert(/Solved in 1\/6/.test(await page.textContent("#message")), "win not detected on retry after a dropped request");
+});
+
 // ────────────── Main runner ──────────────
 
 async function main() {

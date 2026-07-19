@@ -246,7 +246,7 @@ HTML_PAGE = r"""
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>WORDLE</title>
 <style>
   :root {
@@ -285,7 +285,7 @@ HTML_PAGE = r"""
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: clamp(14px, 4vw, 32px) 12px 40px;
+    padding: clamp(14px, 4vw, 32px) 12px calc(40px + env(safe-area-inset-bottom));
     overflow-x: hidden;
     touch-action: manipulation;
   }
@@ -324,6 +324,7 @@ HTML_PAGE = r"""
     cursor: pointer;
     line-height: 1;
     flex-shrink: 0;
+    touch-action: manipulation;
   }
   #hintBtn:hover { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 209, 102, 0.5); }
   #timer {
@@ -376,6 +377,7 @@ HTML_PAGE = r"""
     overflow: hidden;
     border: 1px solid var(--panel-border);
     border-radius: 8px;
+    touch-action: manipulation;
     font-size: clamp(1.1rem, 5vw, 1.5rem);
     font-weight: 700;
     color: var(--fg);
@@ -474,6 +476,7 @@ HTML_PAGE = r"""
     padding: 10px 20px;
     border-radius: 8px;
     cursor: pointer;
+    touch-action: manipulation;
   }
   #newgame:hover { filter: brightness(1.1); box-shadow: 0 0 20px rgba(255, 79, 216, 0.4); }
 
@@ -529,6 +532,7 @@ HTML_PAGE = r"""
     margin-bottom: 10px;
     cursor: pointer;
     font-family: inherit;
+    touch-action: manipulation;
   }
   .modal-option:hover { border-color: var(--cyan); }
   .modal-option small { display: block; color: var(--dim); margin-top: 3px; }
@@ -541,6 +545,7 @@ HTML_PAGE = r"""
     color: var(--fg);
     cursor: pointer;
     font-family: inherit;
+    touch-action: manipulation;
   }
   .modal-actions button.confirm { background: var(--magenta); border-color: var(--magenta); color: #250014; font-weight: 700; }
   .word-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow-y: auto; margin: 10px 0; }
@@ -552,6 +557,7 @@ HTML_PAGE = r"""
     font-size: 0.85rem;
     letter-spacing: 0.05em;
     cursor: pointer;
+    touch-action: manipulation;
   }
   .word-chip:hover { border-color: var(--cyan); color: var(--cyan); }
   .modal-close {
@@ -562,6 +568,7 @@ HTML_PAGE = r"""
     color: var(--cyan);
     cursor: pointer;
     font-family: inherit;
+    touch-action: manipulation;
   }
 
   #sparkles {
@@ -587,7 +594,7 @@ HTML_PAGE = r"""
   }
 
   @media (max-height: 700px) {
-    body { padding: clamp(8px, 2vw, 16px); }
+    body { padding: clamp(8px, 2vw, 16px); padding-bottom: calc(clamp(8px, 2vw, 16px) + env(safe-area-inset-bottom)); }
     .terminal { padding: 12px; }
     #board { gap: 4px; margin-bottom: 10px; }
     .row { gap: 4px; }
@@ -601,7 +608,7 @@ HTML_PAGE = r"""
   }
 
   @media (max-height: 580px) {
-    body { padding: 4px; }
+    body { padding: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
     .terminal { padding: 6px; }
     #board { gap: 2px; margin-bottom: 6px; }
     .row { gap: 2px; }
@@ -697,7 +704,10 @@ function makeKey(label, wide) {
   btn.textContent = label;
   btn.dataset.key = label;
   btn.addEventListener("mousedown", (e) => e.preventDefault());
-  btn.addEventListener("click", () => handleKey(label));
+  btn.addEventListener("click", () => {
+    if (btn.disabled) return; // guard against disabled-button click quirks on some mobile browsers
+    handleKey(label);
+  });
   return btn;
 }
 
@@ -826,8 +836,14 @@ function spawnSparkles() {
 async function newGame() {
   renderGen++; // invalidate any in-flight guess response / pending reveal-delay timer from the old game
   hintOverlay.classList.add("hidden");
-  const res = await fetch("/api/new", { method: "POST" });
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch("/api/new", { method: "POST" });
+    data = await res.json();
+  } catch (err) {
+    setMessage("Connection hiccup — tap New Game to try again.");
+    return;
+  }
   attempts = [];
   currentGuess = "";
   gameOver = false;
@@ -858,9 +874,16 @@ async function submitGuess() {
       body: JSON.stringify({ word: guessedWord }),
     });
     data = await res.json();
-  } finally {
+  } catch (err) {
+    // A dropped connection or a non-JSON error page (cold start, flaky mobile
+    // network) must not silently eat the guess -- without this, a winning
+    // guess could vanish with no message, no board update, and no way to
+    // retry it since currentGuess/submitting are left in a stuck state.
     submitting = false;
+    if (gen === renderGen) setMessage("Connection hiccup — try that guess again.");
+    return;
   }
+  submitting = false;
 
   // A new game may have started while this request was in flight -- discard
   // the now-stale response instead of applying it on top of the fresh board.
@@ -978,12 +1001,19 @@ function openHintConfirm(opt) {
 }
 
 async function useHint(level) {
-  const res = await fetch("/api/hint", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level }),
-  });
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch("/api/hint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level }),
+    });
+    data = await res.json();
+  } catch (err) {
+    hintModal.innerHTML = "<h2>Connection hiccup — try again</h2>";
+    setTimeout(openHintMenu, 1200);
+    return;
+  }
   if (data.error) {
     hintModal.innerHTML = "<h2>" + data.error + "</h2>";
     setTimeout(openHintMenu, 1200);
