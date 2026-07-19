@@ -652,6 +652,7 @@ let startedAt = Date.now();
 let penaltySeconds = 0;
 let timerHandle = null;
 let submitting = false;
+let renderGen = 0;
 
 const boardEl = document.getElementById("board");
 const messageEl = document.getElementById("message");
@@ -823,6 +824,7 @@ function spawnSparkles() {
 }
 
 async function newGame() {
+  renderGen++; // invalidate any in-flight guess response / pending reveal-delay timer from the old game
   hintOverlay.classList.add("hidden");
   const res = await fetch("/api/new", { method: "POST" });
   const data = await res.json();
@@ -847,6 +849,7 @@ async function submitGuess() {
   }
   submitting = true;
   const guessedWord = currentGuess;
+  const gen = renderGen;
   let data;
   try {
     const res = await fetch("/api/guess", {
@@ -858,6 +861,10 @@ async function submitGuess() {
   } finally {
     submitting = false;
   }
+
+  // A new game may have started while this request was in flight -- discard
+  // the now-stale response instead of applying it on top of the fresh board.
+  if (gen !== renderGen) return;
 
   if (data.error) {
     setMessage(data.error);
@@ -880,6 +887,9 @@ async function submitGuess() {
     const elapsed = currentElapsed();
     timerEl.textContent = formatClock(elapsed);
     setTimeout(() => {
+      // A new game may have started during the reveal delay -- don't let this
+      // stale win/loss message clobber whatever the new game is showing.
+      if (gen !== renderGen) return;
       if (data.won) {
         setMessage("Solved in " + attempts.length + "/" + MAX_ATTEMPTS + " · " + formatDuration(elapsed));
         spawnSparkles();
@@ -888,7 +898,9 @@ async function submitGuess() {
       }
     }, revealDelay);
   } else {
-    setTimeout(() => setMessage(""), revealDelay);
+    setTimeout(() => {
+      if (gen === renderGen) setMessage("");
+    }, revealDelay);
   }
 }
 
@@ -1034,5 +1046,5 @@ newGame();
 
 
 @app.get("/", response_class=HTMLResponse)
-def index() -> str:
-    return HTML_PAGE
+def index() -> HTMLResponse:
+    return HTMLResponse(HTML_PAGE, headers={"Cache-Control": "no-store"})

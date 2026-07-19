@@ -765,6 +765,28 @@ test("L8: double-tapping ENTER on the winning guess submits exactly once and sti
   assert(/Solved in 1\/6/.test(await page.textContent("#message")), "win not correctly detected after double-tap ENTER");
 });
 
+test("L8: starting a new game right after a win doesn't get its message clobbered by the stale win-reveal timer", async (page, context) => {
+  // Regression: the winning/losing message is applied via a setTimeout fired
+  // ~1.3s after the guess response (to let the flip animation finish first).
+  // That timer had no way to tell a new game had since started, so clicking
+  // "New Game" within that window let the stale "Solved in X/6" text land
+  // *after* newGame()'s "Guess the 5-letter word" message and overwrite it --
+  // the board would show an empty fresh game with a leftover win message.
+  const target = await decodeTarget(context);
+  const responded = page.waitForResponse((res) => res.url().includes("/api/guess"));
+  for (const ch of target) await page.keyboard.press(ch.toUpperCase());
+  await page.keyboard.press("Enter");
+  await responded; // guess response back, but the ~1.3s reveal-delay timer is still pending
+
+  await page.click("#newgame");
+  await waitForGameReady(page, context);
+  await page.waitForTimeout(2000); // let the old game's stale reveal-delay timer fire, if it's going to
+
+  const message = await page.textContent("#message");
+  assert(!/Solved in/.test(message), `stale win message leaked into the new game: "${message}"`);
+  assert(message.includes("Guess the"), `expected the new-game prompt to still be showing, got "${message}"`);
+});
+
 // ────────────── Main runner ──────────────
 
 async function main() {
