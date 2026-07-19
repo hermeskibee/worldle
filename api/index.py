@@ -271,7 +271,8 @@ HTML_PAGE = r"""
     margin: 0;
     background: var(--bg-bottom);
     overscroll-behavior: none;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
   html {
     touch-action: manipulation;
@@ -462,7 +463,7 @@ HTML_PAGE = r"""
   .key.correct { background: var(--correct); border-color: var(--correct); color: #052e22; }
   .key.present { background: var(--present); border-color: var(--present); color: #3a2900; }
   .key.absent  { background: var(--absent); border-color: var(--absent); color: #6a648f; }
-  .key:disabled { cursor: not-allowed; }
+  .key:disabled { cursor: not-allowed; pointer-events: none; }
   .key.wide { flex: 1.6; max-width: 64px; font-size: 0.68rem; }
   #newgame {
     display: block;
@@ -504,6 +505,7 @@ HTML_PAGE = r"""
     justify-content: center;
     z-index: 50;
     padding: 16px;
+    touch-action: manipulation;
   }
   .overlay.hidden { display: none; }
   .modal {
@@ -919,6 +921,10 @@ async function submitGuess() {
       } else {
         setMessage("Out of guesses · " + formatDuration(elapsed) + ". The word was " + data.word + ".");
       }
+      // Defensive: guarantee the win/loss message is actually on-screen even
+      // if some device-specific viewport quirk (dynamic type, odd landscape
+      // height) ever leaves the layout taller than the visible area.
+      messageEl.scrollIntoView({ block: "nearest" });
     }, revealDelay);
   } else {
     setTimeout(() => {
