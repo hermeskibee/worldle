@@ -593,6 +593,18 @@ HTML_PAGE = r"""
     #newgame { margin: 8px auto 0; padding: 8px 18px; }
     .site-footer { display: none; }
   }
+
+  @media (max-height: 580px) {
+    body { padding: 4px; }
+    .terminal { padding: 6px; }
+    #board { gap: 2px; margin-bottom: 6px; }
+    .row { gap: 2px; }
+    .tile { font-size: clamp(0.85rem, 4vw, 1.2rem); }
+    #keyboard { gap: 2px; }
+    .kb-row { gap: 2px; }
+    .key { padding: 4px 3px; font-size: 0.65rem; }
+    #newgame { margin: 4px auto 0; padding: 6px 14px; font-size: 0.8rem; }
+  }
 </style>
 </head>
 <body>
