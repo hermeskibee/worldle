@@ -603,6 +603,40 @@ test("L6: keyboard is never inside a scrollable container and stays fully in vie
   }
 });
 
+test("L6: board tiles never overlap each other, even on the tiniest phones", async (page) => {
+  for (const { w, h } of [{ w: 320, h: 568 }, { w: 375, h: 667 }]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(150);
+
+    const boxes = await page.evaluate(() => {
+      const out = [];
+      for (let r = 0; r < 6; r++) {
+        const row = [];
+        for (let c = 0; c < 5; c++) {
+          row.push(document.getElementById(`tile-${r}-${c}`).getBoundingClientRect());
+        }
+        out.push(row);
+      }
+      return out;
+    });
+
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 5; c++) {
+        const tile = boxes[r][c];
+        assert(tile.width > 0 && tile.height > 0, `tile-${r}-${c} has collapsed to zero size at ${w}x${h}`);
+        if (c < 4) {
+          const next = boxes[r][c + 1];
+          assert(tile.right <= next.left + 0.5, `tile-${r}-${c} overlaps tile-${r}-${c + 1} horizontally at ${w}x${h}`);
+        }
+        if (r < 5) {
+          const below = boxes[r + 1][c];
+          assert(tile.bottom <= below.top + 0.5, `tile-${r}-${c} overlaps tile-${r + 1}-${c} vertically at ${w}x${h}`);
+        }
+      }
+    }
+  }
+});
+
 // ────────────── L7: Timer ──────────────
 
 test("L7: timer counts up during normal gameplay", async (page) => {
