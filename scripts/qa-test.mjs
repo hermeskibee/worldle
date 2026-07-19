@@ -462,6 +462,21 @@ test("L5: ruled-out (absent) keyboard letters become disabled and unclickable", 
   assert(disabledKey.disabled, `absent key "${disabledKey.key}" is not disabled`);
 });
 
+test("L5: all keyboard keys (letters, ENTER, DEL) become disabled once the game is over", async (page, context) => {
+  // Regression: gameOver was flipped true AFTER renderKeyboard() ran on the
+  // winning/losing guess, so every key -- including ones that were never
+  // ruled out -- stayed fully enabled and clickable after the game ended.
+  const target = await decodeTarget(context);
+  await typeWord(page, target);
+  await page.waitForTimeout(FLIP_SETTLE_MS);
+
+  const keys = await page.evaluate(() =>
+    [...document.querySelectorAll(".key")].map((b) => ({ key: b.dataset.key, disabled: b.disabled }))
+  );
+  const stillEnabled = keys.filter((k) => !k.disabled);
+  assert(stillEnabled.length === 0, `keys still enabled after game over: ${JSON.stringify(stillEnabled)}`);
+});
+
 test("L5: DEL key clears the last entered letter", async (page) => {
   await page.keyboard.press("A");
   await page.keyboard.press("B");
@@ -532,6 +547,37 @@ test("L6: mobile zoom-gesture guards are present (viewport + touch-action)", asy
 test("L6: no white gap — html background matches page theme", async (page) => {
   const htmlBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   assert(htmlBg !== "rgba(0, 0, 0, 0)" && htmlBg !== "rgb(255, 255, 255)", `html background looks unset/white: "${htmlBg}"`);
+});
+
+test("L6: no dead empty section stranded at the bottom on tall phones", async (page) => {
+  // Regression: body had no vertical centering, so on any phone taller than
+  // the content's natural height the leftover space piled up entirely below
+  // the footer/new-game button instead of being shared top and bottom.
+  await page.setViewportSize({ width: 412, height: 914 }); // Pixel 7 Pro -- plenty taller than content
+  await page.waitForTimeout(200);
+  const gaps = await page.evaluate(() => {
+    const topbar = document.querySelector(".topbar").getBoundingClientRect();
+    const last = document.querySelector(".site-footer") || document.getElementById("newgame");
+    const lastRect = last.getBoundingClientRect();
+    return { topGap: topbar.top, bottomGap: window.innerHeight - lastRect.bottom };
+  });
+  assert(gaps.bottomGap < gaps.topGap + 40, `bottom gap (${gaps.bottomGap}px) is stranded well past the top gap (${gaps.topGap}px) -- content isn't vertically centered`);
+});
+
+test("L6: keyboard/board containers all carry touch-action:manipulation (double-tap-zoom guard)", async (page) => {
+  // Regression: a disabled <button> (an absent/ruled-out key) doesn't receive
+  // its own touch-action, so a fast double-tap landing on one fell through to
+  // whichever ancestor handled the hit-test -- and without touch-action set
+  // there too, that ancestor let the browser interpret it as a zoom gesture.
+  const touchActions = await page.evaluate(() =>
+    [".terminal", "#board", ".row", "#keyboard", ".kb-row"].map((sel) => ({
+      sel,
+      touchAction: getComputedStyle(document.querySelector(sel)).touchAction,
+    }))
+  );
+  for (const { sel, touchAction } of touchActions) {
+    assert(touchAction === "manipulation", `${sel} touch-action expected "manipulation", got "${touchAction}"`);
+  }
 });
 
 test("L6: page fits within viewport on small phone (iPhone SE, no overflow scroll)", async (page) => {
@@ -694,6 +740,29 @@ test("L8: win via last possible attempt (6th guess)", async (page, context) => {
   await page.waitForTimeout(FLIP_SETTLE_MS);
   const message = await page.textContent("#message");
   assert(/Solved in 6\/6/.test(message), `expected last-attempt win, got "${message}"`);
+});
+
+test("L8: double-tapping ENTER on the winning guess submits exactly once and still detects the win", async (page, context) => {
+  // Regression: submitGuess() had no in-flight guard, so a fast double-tap on
+  // ENTER (or the on-screen key registering twice) fired two overlapping
+  // /api/guess requests for the same word. Both scored against the same
+  // stale pre-guess cookie, so the board could end up all green with the
+  // attempt counter/win message thrown off or duplicated.
+  const target = await decodeTarget(context);
+  for (const ch of target) await page.keyboard.press(ch.toUpperCase());
+  const responded = page.waitForResponse((res) => res.url().includes("/api/guess"));
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter"); // fired back-to-back, before the first response lands
+  await responded;
+  await page.waitForTimeout(FLIP_SETTLE_MS);
+
+  const attemptCount = (await page.textContent("#attemptInfo")).trim();
+  assert(attemptCount === "1" || attemptCount === "1/6", `expected exactly 1 attempt after a double-tap ENTER, got "${attemptCount}"`);
+
+  const classes = await tileClasses(page, 0);
+  classes.forEach((cls, i) => assert(classIncludes(cls, "correct"), `tile-0-${i} expected correct, got "${cls}"`));
+
+  assert(/Solved in 1\/6/.test(await page.textContent("#message")), "win not correctly detected after double-tap ENTER");
 });
 
 // ────────────── Main runner ──────────────

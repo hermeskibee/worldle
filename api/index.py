@@ -266,6 +266,7 @@ HTML_PAGE = r"""
   * { box-sizing: border-box; }
   html, body {
     height: 100%;
+    height: -webkit-fill-available;
     height: 100dvh;
     margin: 0;
     background: var(--bg-bottom);
@@ -283,6 +284,7 @@ HTML_PAGE = r"""
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     padding: clamp(14px, 4vw, 32px) 12px 40px;
     overflow-x: hidden;
     touch-action: manipulation;
@@ -345,6 +347,7 @@ HTML_PAGE = r"""
     box-shadow: 0 0 40px rgba(45, 217, 255, 0.08), 0 8px 30px rgba(0, 0, 0, 0.4);
     padding: 20px;
     position: relative;
+    touch-action: manipulation;
   }
   #board {
     display: grid;
@@ -353,6 +356,7 @@ HTML_PAGE = r"""
     margin-bottom: 18px;
     min-height: 0;
     perspective: 500px;
+    touch-action: manipulation;
   }
   .row {
     display: grid;
@@ -360,6 +364,7 @@ HTML_PAGE = r"""
     gap: 6px;
     min-width: 0;
     min-height: 0;
+    touch-action: manipulation;
   }
   .tile {
     aspect-ratio: 1;
@@ -431,8 +436,9 @@ HTML_PAGE = r"""
     gap: 6px;
     align-items: center;
     flex-shrink: 0;
+    touch-action: manipulation;
   }
-  .kb-row { display: flex; gap: 5px; width: 100%; justify-content: center; }
+  .kb-row { display: flex; gap: 5px; width: 100%; justify-content: center; touch-action: manipulation; }
   .key {
     min-width: 28px;
     padding: clamp(8px, 3vw, 14px) 6px;
@@ -645,6 +651,7 @@ let hintedTiles = {};
 let startedAt = Date.now();
 let penaltySeconds = 0;
 let timerHandle = null;
+let submitting = false;
 
 const boardEl = document.getElementById("board");
 const messageEl = document.getElementById("message");
@@ -741,8 +748,8 @@ function renderKeyboard() {
     const k = btn.dataset.key;
     if (k.length === 1 && keyStatus[k]) {
       btn.className = "key " + keyStatus[k] + (btn.classList.contains("wide") ? " wide" : "");
-      btn.disabled = keyStatus[k] === "absent";
     }
+    btn.disabled = gameOver || (k.length === 1 && keyStatus[k] === "absent");
   });
 }
 
@@ -833,26 +840,35 @@ async function newGame() {
 }
 
 async function submitGuess() {
+  if (submitting) return;
   if (currentGuess.length !== WORD_LENGTH) {
     setMessage("Not enough letters.");
     return;
   }
-  const res = await fetch("/api/guess", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ word: currentGuess }),
-  });
-  const data = await res.json();
+  submitting = true;
+  const guessedWord = currentGuess;
+  let data;
+  try {
+    const res = await fetch("/api/guess", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ word: guessedWord }),
+    });
+    data = await res.json();
+  } finally {
+    submitting = false;
+  }
 
   if (data.error) {
     setMessage(data.error);
     return;
   }
 
-  attempts.push({ word: currentGuess, result: data.result });
-  updateKeyStatus(currentGuess, data.result);
+  attempts.push({ word: guessedWord, result: data.result });
+  updateKeyStatus(guessedWord, data.result);
   applyServerState(data);
   currentGuess = "";
+  if (data.gameOver) gameOver = true;
   renderBoard();
   animateLastRow();
   renderKeyboard();
@@ -860,7 +876,6 @@ async function submitGuess() {
   const revealDelay = WORD_LENGTH * 200 + 300;
 
   if (data.gameOver) {
-    gameOver = true;
     stopTimer();
     const elapsed = currentElapsed();
     timerEl.textContent = formatClock(elapsed);
